@@ -3115,6 +3115,12 @@ bool ValueDecl::isDynamic() const {
     getAttrs().hasAttribute<DynamicAttr>());
 }
 
+bool ValueDecl::isPackage() const {
+    return evaluateOrDefault(getASTContext().evaluator,
+                             IsPackageRequest{const_cast<ValueDecl *>(this)},
+                             getAttrs().hasAttribute<PackageAccessControlAttr>());
+}
+
 bool ValueDecl::isObjCDynamicInGenericClass() const {
   if (!isObjCDynamic())
     return false;
@@ -3482,7 +3488,8 @@ static AccessLevel getMaximallyOpenAccessFor(const ValueDecl *decl) {
 }
 
 /// Adjust \p access based on whether \p VD is \@usableFromInline, has been
-/// testably imported from \p useDC or \p VD is an imported SPI.
+/// testably imported from \p useDC, \p VD is an imported SPI, or \p VD is an
+/// imported package decl.
 ///
 /// \p access isn't always just `VD->getFormalAccess()` because this adjustment
 /// may be for a write, in which case the setter's access might be used instead.
@@ -3684,11 +3691,18 @@ static bool checkAccessUsingAccessScopes(const DeclContext *useDC,
   if (accessScope.getDeclContext() == useDC) return true;
   if (!AccessScope(useDC).isChildOf(accessScope)) return false;
 
-  // Check SPI access
-  if (!useDC || !VD->isSPI()) return true;
+  if (!useDC) return true;
   auto useSF = dyn_cast<SourceFile>(useDC->getModuleScopeContext());
-  return !useSF || useSF->isImportedAsSPI(VD) ||
-         VD->getDeclContext()->getParentModule() == useDC->getParentModule();
+  auto parentModuleMatched = VD->getDeclContext()->getParentModule() == useDC->getParentModule();
+  // Check SPI access
+  if (VD->isSPI()) {
+      return !useSF || useSF->isImportedAsSPI(VD) || parentModuleMatched;
+  }
+  // Check @package access
+  if (VD->isPackage()) {
+      return !useSF || useSF->isImportedAsPackage(VD) || parentModuleMatched;
+  }
+  return true;
 }
 
 /// Checks if \p VD may be used from \p useDC, taking \@testable and \@_spi

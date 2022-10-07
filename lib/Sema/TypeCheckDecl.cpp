@@ -906,6 +906,13 @@ bool IsMoveOnlyRequest::evaluate(Evaluator &evaluator, ValueDecl *decl) const {
   return false;
 }
 
+bool IsPackageRequest::evaluate(Evaluator &evaluator, ValueDecl *decl) const {
+  // For now only do this for nominal type decls.
+  if (isa<ValueDecl>(decl) || isa<ExtensionDecl>(decl) || isa<ImportDecl>(decl))
+    return decl->getAttrs().hasAttribute<PackageAccessControlAttr>();
+  return false;
+}
+
 bool
 IsStaticRequest::evaluate(Evaluator &evaluator, FuncDecl *decl) const {
   if (auto *accessor = dyn_cast<AccessorDecl>(decl))

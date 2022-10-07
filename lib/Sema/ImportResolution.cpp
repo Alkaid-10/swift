@@ -535,6 +535,9 @@ UnboundImport::UnboundImport(ImportDecl *ID)
 
   if (ID->getAttrs().hasAttribute<ImplementationOnlyAttr>())
     import.options |= ImportFlags::ImplementationOnly;
+  // E.g. @package import Foo
+  if (ID->getAttrs().hasAttribute<PackageAccessControlAttr>())
+      import.options |= ImportFlags::PackageAccessControl;
 
   if (auto *privateImportAttr =
           ID->getAttrs().getAttribute<PrivateImportAttr>()) {
@@ -553,6 +556,14 @@ UnboundImport::UnboundImport(ImportDecl *ID)
   if (auto attr = ID->getAttrs().getAttribute<PreconcurrencyAttr>()) {
     import.options |= ImportFlags::Preconcurrency;
     import.preconcurrencyRange = attr->getRangeWithAt();
+  }
+  // Handle if `-package-modules <module_name>` was passed
+  auto pkgModules = ID->getASTContext().getPackageModules();
+  for (auto pkgModule: pkgModules) {
+    if (pkgModule == ID->getImportPath().front().Item.str()) {
+      import.options |= ImportFlags::PackageAccessControl;
+      break;
+    }
   }
 }
 
